@@ -20,7 +20,7 @@ setup(
     ],
     entry_points={
         'mopidy.ext': [
-            'infiniplay = mopidy_infiniplay:Extension',
+            'infiniplay = mopidy_infiniplay:InfiniPlayExtension',
         ],
     },
     package_data={
