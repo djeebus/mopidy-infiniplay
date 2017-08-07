@@ -23,6 +23,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         self.config = config
         self.core = core  # type: Core
 
+        self._is_adding = False
         self._tracklist = []
 
     def on_start(self):
@@ -32,6 +33,11 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         self._check_state()
 
     def track_playback_ended(self, tl_track, time_position):
+        # when adding a track, the previous track stops, which triggers this
+        # event. ignore it.
+        if self._is_adding:
+            return
+
         self._check_state()
 
     def _configure_mopidy(self):
@@ -91,7 +97,10 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         logger.info('playing %s' % track_uri)
 
         tracklist = self.core.tracklist
+
+        self._is_adding = True
         items = tracklist.add(uri=track_uri).get()
+        self._is_adding = False
 
         # assumption: new item is always at the end
         item = items[-1]
