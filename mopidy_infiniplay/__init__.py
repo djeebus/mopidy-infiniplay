@@ -3,11 +3,12 @@ import pkg_resources
 import pykka
 import random
 
+from mopidy.audio.constants import PlaybackState
 from mopidy.core import CoreListener
 from mopidy.core.actor import Core
 from mopidy.ext import Extension
 
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 logger = logging.getLogger('mopidy-infiniplay')
 
 
@@ -15,15 +16,11 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
     """Keeps the music going! If the music has stopped for n seconds, play
     a random song."""
 
-    max_quiet_time = 1.5
-    max_empty_time = 1.5
-
     def __init__(self, config, core):
         pykka.ThreadingActor.__init__(self)
         self.config = config
         self.core = core  # type: Core
 
-        self._is_adding = False
         self._tracklist = []
 
     def on_start(self):
@@ -33,11 +30,6 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         self._check_state()
 
     def track_playback_ended(self, tl_track, time_position):
-        # when adding a track, the previous track stops, which triggers this
-        # event. ignore it.
-        if self._is_adding:
-            return
-
         self._check_state()
 
     def _configure_mopidy(self):
@@ -49,10 +41,9 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         tracklist.set_single(False).get()
 
     def _check_state(self):
-        tracklist = self.core.tracklist
-        next_track_id = tracklist.get_eot_tlid().get()
-        if next_track_id:
-            logger.info('a song was manually added, not playing a new track')
+        playback = self.core.playback
+        state = playback.get_state().get()
+        if state == PlaybackState.PLAYING:
             return
 
         self._play_random_track()
@@ -94,16 +85,9 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
         track_uri = random.choice(self._tracklist)
 
-        logger.info('playing %s' % track_uri)
-
         tracklist = self.core.tracklist
 
-        self._is_adding = True
-        items = tracklist.add(uri=track_uri).get()
-        self._is_adding = False
-
-        # assumption: new item is always at the end
-        item = items[-1]
+        item, = tracklist.add(uris=[track_uri]).get()
 
         playback = self.core.playback
         playback.play(tlid=item.tlid).get()
