@@ -3,12 +3,13 @@ import mopidy.config
 import mopidy.core
 import mopidy.ext
 import os
+import pkg_resources
 import pykka
 import sched
 import threading
 import time
 
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 
 class PartyController(pykka.ThreadingActor, mopidy.core.CoreListener):
@@ -137,8 +138,9 @@ class Extension(mopidy.ext.Extension):
     version = __version__
 
     def get_default_config(self):
-        conf_file = os.path.join(os.path.dirname(__file__), 'ext.conf')
-        return mopidy.config.read(conf_file)
+        fp = pkg_resources.resource_stream('mopidy_infiniplay', 'ext.conf')
+        with fp:
+            return fp.read()
 
     def setup(self, registry):
         registry.add('frontend', PartyController)
