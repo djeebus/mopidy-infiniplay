@@ -8,7 +8,7 @@ import sched
 import threading
 import time
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 
 class PartyController(pykka.ThreadingActor, mopidy.core.CoreListener):
