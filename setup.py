@@ -23,6 +23,9 @@ setup(
             'infiniplay = mopidy_infiniplay:Extension',
         ],
     },
+    package_data={
+        b'mopidy_infiniplay': ['ext.conf'],
+    },
     classifiers=[
         'Environment :: No Input/Output (Daemon)',
         'Intended Audience :: End Users/Desktop',
