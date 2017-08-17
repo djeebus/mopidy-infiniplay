@@ -8,6 +8,8 @@ from mopidy.core import CoreListener
 from mopidy.core.actor import Core
 from mopidy.ext import Extension
 
+from mopidy_infiniplay import __version__
+
 logger = logging.getLogger('mopidy-infiniplay')
 
 
