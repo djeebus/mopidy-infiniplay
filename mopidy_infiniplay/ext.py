@@ -4,6 +4,7 @@ import pykka
 import random
 
 from mopidy.audio.constants import PlaybackState
+from mopidy.config import Integer
 from mopidy.core import CoreListener
 from mopidy.core.actor import Core
 from mopidy.ext import Extension
@@ -19,19 +20,22 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
     def __init__(self, config, core):
         pykka.ThreadingActor.__init__(self)
-        self.config = config
+
+        self.min_tracks = config['infiniplay']['min_tracks']
         self.core = core  # type: Core
 
-        self._tracklist = []
+        self._tracklist = None
 
     def on_start(self):
+        self._check_state()
         self._configure_mopidy()
         self._build_tracklist()
 
+    def playback_state_changed(self, old_state, new_state):
         self._check_state()
 
     def track_playback_ended(self, tl_track, time_position):
-        self._check_state()
+        self.core.tracklist.remove({'tlid': tl_track.tlid})
 
     def _configure_mopidy(self):
         tracklist = self.core.tracklist
@@ -43,11 +47,51 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
     def _check_state(self):
         playback = self.core.playback
-        state = playback.get_state().get()
-        if state == PlaybackState.PLAYING:
-            return
+        tracklist = self.core.tracklist
 
-        self._play_random_track()
+        if self._tracklist is None:
+            logger.info("tracks have not been indexed yet")
+            selector = self._get_track_from_mopidy
+        else:
+            selector = self._get_track_from_cache
+
+        while True:
+            length = tracklist.get_length().get()
+            if length >= self.min_tracks:
+                break
+
+            track_uri = selector()
+            if not track_uri:
+                logger.warning("Could not find tracks to add")
+                return
+
+            tracklist.add(uris=[track_uri]).get()
+
+        state = playback.get_state().get()
+        if state == PlaybackState.STOPPED:
+            playback.play()
+
+    def _get_track_from_cache(self):
+        return random.choice(self._tracklist)
+
+    def _get_track_from_mopidy(self, url=None):
+        items = self.core.library.browse(url).get()
+        random.shuffle(items)
+
+        while True:
+            item = items.pop()
+            uri = item.uri
+
+            if not uri.startswith('local:'):
+                continue
+
+            if item.type == 'directory':
+                subitem = self._get_track_from_mopidy(uri)
+                if subitem:
+                    return subitem
+
+            elif item.type == 'track':
+                return uri
 
     def _build_tracklist(self):
         logger.info('configurating tracklist')
@@ -55,8 +99,9 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         library = self.core.library
 
         unknown_types = set()
-
         completed_work = set()
+        tracklist = list()
+
         work = library.browse(None).get()
         while work:
             item = work.pop()
@@ -72,7 +117,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
                 new_work = library.browse(uri=uri).get()
                 work += new_work
             elif item_type == 'track':
-                self._tracklist.append(uri)
+                tracklist.append(uri)
             elif item_type == 'album':
                 pass
             else:
@@ -82,54 +127,8 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
             completed_work.add(uri)
 
-        logger.info('found %s tracks' % len(self._tracklist))
-
-    def _play_random_track(self):
-        if not self._tracklist:
-            logger.warning('no tracks to shuffle!')
-            return
-
-        track_uri = random.choice(self._tracklist)
-
-        tracklist = self.core.tracklist
-
-        item, = tracklist.add(uris=[track_uri]).get()
-
-        playback = self.core.playback
-        playback.play(tlid=item.tlid).get()
-
-    def _initialize_playlist(self):
-        library = self.core.library
-
-        uris_to_add = list()
-        completed_work = set()
-        work = library.browse(None).get()
-        while work:
-            item = work.pop()
-            uri = item.uri
-            if uri in completed_work:
-                continue
-
-            if not uri.startswith('local:'):
-                continue
-
-            item_type = item.type
-            if item_type == 'directory':
-                new_work = library.browse(uri=uri).get()
-                work += new_work
-            elif item_type == 'track':
-                uris_to_add.append(uri)
-
-            completed_work.add(uri)
-
-        tracklist = self.core.tracklist
-        tracklist.set_random(True)
-        tracklist.set_repeat(True)
-
-        tracklist.set_consume(False)
-        tracklist.set_single(False)
-
-        tracklist.add(uris=uris_to_add).get()
+        logger.info('found %s tracks' % len(tracklist))
+        self._tracklist = tracklist
 
 
 class InfiniPlayExtension(Extension):
@@ -141,6 +140,11 @@ class InfiniPlayExtension(Extension):
         fp = pkg_resources.resource_stream('mopidy_infiniplay', 'ext.conf')
         with fp:
             return fp.read()
+
+    def get_config_schema(self):
+        base = super(InfiniPlayExtension, self).get_config_schema()
+        base['min_tracks'] = Integer()
+        return base
 
     def setup(self, registry):
         registry.add('frontend', InfiniPlayController)
