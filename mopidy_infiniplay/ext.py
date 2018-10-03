@@ -35,12 +35,11 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         self._check_state()
 
     def track_playback_ended(self, tl_track, time_position):
-        self.core.tracklist.remove({'tlid': tl_track.tlid})
+        self.core.tracklist.remove({'tlid': [tl_track.tlid]}).get()
 
     def _configure_mopidy(self):
         tracklist = self.core.tracklist
 
-        tracklist.set_consume(True).get()
         tracklist.set_random(False).get()
         tracklist.set_repeat(False).get()
         tracklist.set_single(False).get()
@@ -127,7 +126,6 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
             completed_work.add(uri)
 
-        logger.info('found %s tracks' % len(tracklist))
         self._tracklist = tracklist
 
 
