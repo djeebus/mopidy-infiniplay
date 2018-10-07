@@ -75,7 +75,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
     def _add_tracks(self):
         tracklist = self.core.tracklist
 
-        if self._tracklist is None:
+        if self._tracklist:
             selector = self._get_track_from_cache
         else:
             logger.info("tracks have not been indexed yet")
