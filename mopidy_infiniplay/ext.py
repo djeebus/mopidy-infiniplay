@@ -28,7 +28,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         self.core = core  # type: Core
 
         self._running = True
-        self._tracklist = None
+        self._cache = None
         self._nanny = threading.Thread(target=self._run_nanny)
 
     def _run_nanny(self):
@@ -75,7 +75,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
     def _add_tracks(self):
         tracklist = self.core.tracklist
 
-        if self._tracklist:
+        if self._cache:
             selector = self._get_track_from_cache
         else:
             logger.info("tracks have not been indexed yet")
@@ -99,7 +99,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
             tracklist.add(uris=[track_uri]).get()
 
     def _get_track_from_cache(self):
-        return random.choice(self._tracklist)
+        return random.choice(self._cache)
 
     def _get_track_from_mopidy(self, url=None):
         items = self.core.library.browse(url).get()
@@ -121,7 +121,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
                 return uri
 
     def _build_tracklist(self):
-        logger.info('configurating tracklist')
+        logger.info('precaching tracks')
 
         library = self.core.library
 
@@ -154,8 +154,8 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
             completed_work.add(uri)
 
-        self._tracklist = tracklist
-        logger.info('done configurating')
+        self._cache = tracklist
+        logger.info('found {count} tracks'.format(count=len(self._cache)))
 
 
 class InfiniPlayExtension(Extension):
