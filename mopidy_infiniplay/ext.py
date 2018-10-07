@@ -76,10 +76,10 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         tracklist = self.core.tracklist
 
         if self._tracklist is None:
+            selector = self._get_track_from_cache
+        else:
             logger.info("tracks have not been indexed yet")
             selector = self._get_track_from_mopidy
-        else:
-            selector = self._get_track_from_cache
 
         while True:
             length = tracklist.get_length().get()
