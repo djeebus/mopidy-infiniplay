@@ -154,7 +154,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
             uri = item.uri
             item_type = item.type
 
-            logger.info('found %s: %s' % (item_type, uri))
+            logger.debug('found %s: %s' % (item_type, uri))
             if uri in completed_work:
                 continue
 
