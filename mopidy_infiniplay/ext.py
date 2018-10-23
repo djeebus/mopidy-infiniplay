@@ -34,6 +34,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
     def _run_nanny(self):
         while self._running:
             self._add_tracks()
+            self._check_state()
 
             # if the library hasn't been loaded yet, this function call
             # succeeds, but
@@ -86,7 +87,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
             logger.info("tracks have not been indexed yet")
             selector = self._get_track_from_mopidy
 
-        while True:
+        while self._running:
             length = tracklist.get_length().get()
             if length >= self.min_tracks:
                 break
@@ -110,7 +111,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
         items = self.core.library.browse(url).get()
         random.shuffle(items)
 
-        while items:
+        while items and self._running:
             item = items.pop()
             uri = item.uri
 
@@ -139,6 +140,10 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
             item = work.pop()
             uri = item.uri
             if uri in completed_work:
+                continue
+
+            if uri.startswith('file:'):
+                logger.info('skipping %s' % uri)
                 continue
 
             item_type = item.type
