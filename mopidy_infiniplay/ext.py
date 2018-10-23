@@ -10,6 +10,7 @@ from mopidy.config import Integer
 from mopidy.core import CoreListener
 from mopidy.core.actor import Core
 from mopidy.ext import Extension
+from mopidy.models import Ref
 
 from mopidy_infiniplay import __version__
 
@@ -36,11 +37,6 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
             self._add_tracks()
             self._check_state()
 
-            # if the library hasn't been loaded yet, this function call
-            # succeeds, but
-            if not self._cache:
-                self._build_tracklist()
-
             time.sleep(1)
 
     def on_start(self):
@@ -50,6 +46,8 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
         self._check_state()
         self._configure_mopidy()
+
+        self._build_tracklist()
 
     def on_stop(self):
         print('stop!')
@@ -107,54 +105,64 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
     def _get_track_from_cache(self):
         return random.choice(self._cache)
 
+    folder_ref_types = {
+        Ref.DIRECTORY,
+        Ref.ARTIST,
+        Ref.ALBUM,
+    }
+
     def _get_track_from_mopidy(self, url=None):
         items = self.core.library.browse(url).get()
+
+        # omgz. SQLiteLibrary.browse(None) returns a volatile array,
+        # critical to its functionality. Modifying this array causes all
+        # kinds of issues, and removing the items makes the class completely
+        # unusable. Do not ask how long this took to track down.
+        # copy the list to avoid this issue
+        items = items[:]
         random.shuffle(items)
 
         while items and self._running:
             item = items.pop()
             uri = item.uri
 
-            if item.type == 'directory':
+            if item.type in self.folder_ref_types:
                 subitem = self._get_track_from_mopidy(uri)
                 if subitem:
                     return subitem
 
-            elif item.type == 'track':
+            elif item.type == Ref.TRACK:
                 return uri
 
     def _build_tracklist(self):
         logger.info('precaching tracks')
 
-        library = self.core.library
-
         unknown_types = set()
         completed_work = set()
         tracklist = list()
 
-        work = library.browse(None).get()
+        # omgz. SQLiteLibrary.browse(None) returns a volatile array,
+        # critical to its functionality. Modifying this array causes all
+        # kinds of issues, and removing the items makes the class completely
+        # unusable. Do not ask how long this took to track down.
+        # copy the list to avoid this issue
+        work = list()
+        work += self.core.library.browse(None).get()
+
         while work:
             item = work.pop()
             uri = item.uri
+            item_type = item.type
+
+            logger.info('found %s: %s' % (item_type, uri))
             if uri in completed_work:
                 continue
 
-            if uri.startswith('file:'):
-                logger.info('skipping %s' % uri)
-                continue
-
-            item_type = item.type
-            if item_type == 'directory':
-                new_work = library.browse(uri=uri).get()
+            if item_type in self.folder_ref_types:
+                new_work = self.core.library.browse(uri=uri).get()
                 work += new_work
-            elif item_type == 'track':
+            elif item_type == Ref.TRACK:
                 tracklist.append(uri)
-            elif item_type == 'album':
-                pass
-            else:
-                if item_type not in unknown_types:
-                    logger.warning("unknown track type: %s" % item_type)
-                    unknown_types.add(item_type)
 
             completed_work.add(uri)
 
