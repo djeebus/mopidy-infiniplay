@@ -115,9 +115,6 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
             item = items.pop()
             uri = item.uri
 
-            if not uri.startswith('local:'):
-                continue
-
             if item.type == 'directory':
                 subitem = self._get_track_from_mopidy(uri)
                 if subitem:
