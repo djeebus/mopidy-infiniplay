@@ -34,6 +34,12 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
     def _run_nanny(self):
         while self._running:
             self._add_tracks()
+
+            # if the library hasn't been loaded yet, this function call
+            # succeeds, but
+            if not self._cache:
+                self._build_tracklist()
+
             time.sleep(1)
 
     def on_start(self):
@@ -43,7 +49,6 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
         self._check_state()
         self._configure_mopidy()
-        self._build_tracklist()
 
     def on_stop(self):
         print('stop!')
