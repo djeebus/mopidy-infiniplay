@@ -141,9 +141,6 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
             if uri in completed_work:
                 continue
 
-            if not uri.startswith('local:'):
-                continue
-
             item_type = item.type
             if item_type == 'directory':
                 new_work = library.browse(uri=uri).get()
