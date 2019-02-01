@@ -30,7 +30,10 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
 
         self._running = True
         self._cache = None
-        self._nanny = threading.Thread(target=self._run_nanny)
+        self._nanny = threading.Thread(
+            target=self._run_nanny,
+        )
+        self._nanny.daemon = True
 
     def _run_nanny(self):
         while self._running:
@@ -40,17 +43,19 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
             time.sleep(1)
 
     def on_start(self):
-        print('start!')
         self._running = True
         self._nanny.start()
 
         self._check_state()
         self._configure_mopidy()
 
-        self._build_tracklist()
+        build_thread = threading.Thread(
+            target=self._build_tracklist,
+        )
+        build_thread.daemon = True
+        build_thread.start()
 
     def on_stop(self):
-        print('stop!')
         self._running = False
         self._nanny.join()
 
@@ -137,7 +142,6 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
     def _build_tracklist(self):
         logger.info('precaching tracks')
 
-        unknown_types = set()
         completed_work = set()
         tracklist = list()
 
