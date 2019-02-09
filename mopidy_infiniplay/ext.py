@@ -68,6 +68,7 @@ class InfiniPlayController(pykka.ThreadingActor, CoreListener):
     def _configure_mopidy(self):
         tracklist = self.core.tracklist
 
+        tracklist.set_consume(True).get()
         tracklist.set_random(False).get()
         tracklist.set_repeat(False).get()
         tracklist.set_single(False).get()
